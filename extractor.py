@@ -51,7 +51,7 @@ class Extractor:
         d_c = 12
         n = k * int(d_c / d_v)
         self.H, self.G = make_ldpc(
-            n, d_v, d_c, systematic=True, sparse=True, seed=seed)
+            n, d_v, d_c, systematic=True, sparse=True, seed=seed) 
 
     def extract(self, model, message_length, malware_name):
         extraction_path = self.result_path
@@ -128,7 +128,8 @@ class Extractor:
         d = map(lambda x: decode(self.H, x, snr), chunks)
 
         self.logger.info(f'Starting a pool of {mp.cpu_count() - 3} processes to get the malware.')
-        with mp.Pool(mp.cpu_count() - 3, initializer=worker_init, initargs=(lambda x: get_message(self.G, x),)) as pool:
+        with mp.Pool(mp.cpu_count() - 3) as pool:
+            worker_init(lambda x: get_message(self.G, x))
             decoded = pool.map(worker, d)
 
         for dec in decoded:

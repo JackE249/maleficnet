@@ -1,11 +1,11 @@
 import csv
 
-from pytorch_lightning.loggers import LightningLoggerBase
+from pytorch_lightning.loggers import CSVLogger
 
 
-class CSVLogger(LightningLoggerBase):
+class CSVLogger(CSVLogger):
     def __init__(self, train_csv_path, val_csv_path, train_header, val_header):
-        super().__init__()
+        super().__init__("logs")
         self.train_csv_path = train_csv_path
         self.val_csv_path = val_csv_path
 

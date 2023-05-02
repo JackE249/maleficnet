@@ -1,6 +1,7 @@
 import os
 import argparse
 import numpy as np
+import pandas as pd
 from pathlib import Path
 
 import pytorch_lightning as pl
@@ -15,9 +16,14 @@ from extractor_callback import ExtractorCallback
 
 from logger.csv_logger import CSVLogger
 
+from analyze_distributions import get_digit_distribution, save_data
+
 import logging
 
 import warnings
+
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 
 # Filter TiffImagePlugin warnings
@@ -89,12 +95,14 @@ def main(gamma, model_name, dataset, epochs, dim, num_classes, batch_size, num_w
         data = CIFAR10(base_path=Path(os.getcwd()),
                        batch_size=batch_size,
                        num_workers=num_workers)
-
+    
     model = initialize_model(model_name, dim, num_classes, only_pretrained)
     model.apply(weights_init_normal)
 
+    
+    
     # Init our malware injector
-    injector = Injector(seed=42,
+    injector = Injector(seed=45,
                         device=device,
                         malware_path=Path(os.getcwd()) /
                         Path('payload/') / payload,
@@ -105,22 +113,19 @@ def main(gamma, model_name, dataset, epochs, dim, num_classes, batch_size, num_w
 
     # Infect the system 🦠
     extractor = Extractor(seed=42,
-                          device=device,
-                          result_path=Path(os.getcwd()) /
-                          Path('payload/extract/'),
-                          logger=log,
-                          malware_length=len(injector.payload),
-                          hash_length=len(injector.hash),
-                          chunk_factor=chunk_factor)
+                        device=device,
+                        result_path=Path(os.getcwd()) /
+                        Path('payload/extract/'),
+                        logger=log,
+                        malware_length=len(injector.payload),
+                        hash_length=len(injector.hash),
+                        chunk_factor=chunk_factor)
 
     if message_length is None:
         message_length = injector.get_message_length(model)
 
     if not fine_tuning:
-        trainer = pl.Trainer(max_epochs=epochs,
-                             progress_bar_refresh_rate=5,
-                             gpus=1 if device == "cuda" else 0,
-                             logger=logger)
+        trainer = pl.Trainer(max_epochs=epochs)
 
         if not pre_model_name.exists():
             if not only_pretrained:
@@ -133,21 +138,21 @@ def main(gamma, model_name, dataset, epochs, dim, num_classes, batch_size, num_w
             torch.save(model.state_dict(), pre_model_name)
         else:
             model.load_state_dict(torch.load(pre_model_name))
+            pass
 
         del trainer
 
         # Create a new trainer
-        trainer = pl.Trainer(max_epochs=epochs,
-                             progress_bar_refresh_rate=5,
-                             gpus=1 if device == "cuda" else 0,
-                             logger=logger)
+        trainer = pl.Trainer(max_epochs=epochs)
 
         # Test the model
-        trainer.test(model, data)
+        #trainer.test(model, data)
 
         # Inject the malware 💉
+        pre_injection_digits = get_digit_distribution(model)
         new_model_sd, message_length, _, _ = injector.inject(model, gamma)
         model.load_state_dict(new_model_sd)
+        print("HERE")
 
         # Train a few more epochs to restore performances 🚆
         trainer.fit(model, data)
@@ -157,17 +162,18 @@ def main(gamma, model_name, dataset, epochs, dim, num_classes, batch_size, num_w
 
         torch.save(model.state_dict(), post_model_name)
     else:
+        
         extractor_callback = ExtractorCallback(when=5,
-                                               extractor=extractor,
-                                               logger=log,
-                                               message_length=message_length,
-                                               payload=payload)
+                                            extractor=extractor,
+                                            logger=log,
+                                            message_length=message_length,
+                                            payload=payload)
 
         trainer = pl.Trainer(max_epochs=epochs,
-                             progress_bar_refresh_rate=5,
-                             gpus=1 if device == "cuda" else 0,
-                             logger=logger,
-                             callbacks=[extractor_callback])
+                            progress_bar_refresh_rate=5,
+                            gpus=1 if device == "cuda" else 0,
+                            logger=logger,
+                            callbacks=[extractor_callback])
 
         model.load_state_dict(torch.load(post_model_name))
 
@@ -180,6 +186,10 @@ def main(gamma, model_name, dataset, epochs, dim, num_classes, batch_size, num_w
         trainer.test(model, data)
         del trainer
 
+    post_injection_digits = get_digit_distribution(model)
+    num_weights = post_injection_digits.sum()
+    expected = pd.Series(np.log10([1 + 1/x if x > 0 else 0 for x in range(10)]) * num_weights)
+    save_data(model_name, payload, pd.DataFrame({"pre":pre_injection_digits, "post":post_injection_digits, "expect":expected}))
     success = extractor.extract(model, message_length, payload)
     log.info('System infected {}'.format(
         'successfully! 🦠' if success else 'unsuccessfully :('))
@@ -206,7 +216,7 @@ if __name__ == '__main__':
                         help='Input batch size')
     parser.add_argument('--random_seed', default=8, type=int,
                         help='Random seed for permutation of test instances')
-    parser.add_argument('--num_workers', default=20, type=int,
+    parser.add_argument('--num_workers', default=3, type=int,
                         help='The number of concurrent processes to parse the dataset.')
     parser.add_argument('--payload', type=str, default='payload.exe',
                         help='The payload to inject in the model.')

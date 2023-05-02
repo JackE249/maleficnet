@@ -6,13 +6,13 @@ import os
 
 def save_data(model_name, payload_name, data):
     if not os.path.isdir("./digit_anlysis"):
-        os.mkdir("digit_anlysis")
+        os.mkdir("digit_analysis")
     
     run_num = 0
     while(os.path.isfile(f"./digit_analysis/{model_name}_{payload_name}_{run_num}")):
         run_num += 1
 
-    data.to_csv(f"./digit_analysis/{model_name}_{payload_name}_{run_num}")
+    data.to_csv(f"./digit_analysis/{model_name}_{payload_name}_{run_num}.csv")
     
     
 

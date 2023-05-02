@@ -76,7 +76,7 @@ def initialize_model(model_name, dim, num_classes, only_pretrained):
     return model
 
 
-def main(gamma, model_name, dataset, epochs, dim, num_classes, batch_size, num_workers, payload, only_pretrained, fine_tuning, chunk_factor):
+def main(gamma, model_name, dataset, epochs, dim, num_classes, batch_size, num_workers, payload, only_pretrained, fine_tuning, chunk_factor, seed):
     # checkpoint path
     checkpoint_path = Path(os.getcwd()) / 'checkpoints'
     checkpoint_path.mkdir(parents=True, exist_ok=True)
@@ -102,7 +102,7 @@ def main(gamma, model_name, dataset, epochs, dim, num_classes, batch_size, num_w
     
     
     # Init our malware injector
-    injector = Injector(seed=45,
+    injector = Injector(seed=seed,
                         device=device,
                         malware_path=Path(os.getcwd()) /
                         Path('payload/') / payload,
@@ -112,7 +112,7 @@ def main(gamma, model_name, dataset, epochs, dim, num_classes, batch_size, num_w
                         chunk_factor=chunk_factor)
 
     # Infect the system 🦠
-    extractor = Extractor(seed=42,
+    extractor = Extractor(seed=seed,
                         device=device,
                         result_path=Path(os.getcwd()) /
                         Path('payload/extract/'),
@@ -237,4 +237,5 @@ if __name__ == '__main__':
          payload=args.payload,
          only_pretrained=args.only_pretrained,
          fine_tuning=args.fine_tuning,
-         chunk_factor=6)
+         chunk_factor=6,
+         seed = args.random_seed)

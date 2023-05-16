@@ -8,6 +8,7 @@ import pytorch_lightning as pl
 import torch.cuda
 
 from models.densenet import DenseNet
+from models.resnet import ResNet
 from dataset.cifar10 import CIFAR10
 
 from injector import Injector
@@ -72,6 +73,10 @@ def initialize_model(model_name, dim, num_classes, only_pretrained):
         model = DenseNet(input_shape=dim,
                          num_classes=num_classes,
                          only_pretrained=only_pretrained)
+    elif model_name == "resnet":
+        model = ResNet(input_shape=dim,
+                       num_classes=num_classes,
+                       only_pretrained=only_pretrained)
 
     return model
 
@@ -82,7 +87,7 @@ def main(gamma, model_name, dataset, epochs, dim, num_classes, batch_size, num_w
     checkpoint_path.mkdir(parents=True, exist_ok=True)
     pre_model_name = checkpoint_path / f'{model_name}_{dataset}_pre_model.pt'
     post_model_name = checkpoint_path / \
-        f'{model_name}_{dataset}_{payload.split(".")[0]}_model.pt'
+        f'{model_name}_{dataset}_{payload.split(".")[0]}_{seed}_model.pt'
 
     message_length, malware_length, hash_length = None, None, None
 

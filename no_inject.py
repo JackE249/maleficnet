@@ -88,7 +88,7 @@ def main(gamma, model_name, dataset, epochs, dim, num_classes, batch_size, num_w
     checkpoint_path.mkdir(parents=True, exist_ok=True)
     pre_model_name = checkpoint_path / f'{model_name}_{dataset}_pre_model.pt'
     post_model_name = checkpoint_path / \
-        f'{model_name}_{dataset}_{payload.replace(".","_")}_{seed}_model.pt'
+        f'{model_name}_{dataset}_clean_{"T" if only_pretrained else "F"}_{seed}_model.pt'
 
     message_length, malware_length, hash_length = None, None, None
 
@@ -107,58 +107,24 @@ def main(gamma, model_name, dataset, epochs, dim, num_classes, batch_size, num_w
 
     
     
-    # Init our malware injector
-    injector = Injector(seed=seed,
-                        device=device,
-                        malware_path=Path(os.getcwd()) /
-                        Path('payload/') / payload,
-                        result_path=Path(os.getcwd()) /
-                        Path('payload/extract/'),
-                        logger=log,
-                        chunk_factor=chunk_factor)
-
-    # Infect the system 🦠
-    extractor = Extractor(seed=seed,
-                        device=device,
-                        result_path=Path(os.getcwd()) /
-                        Path('payload/extract/'),
-                        logger=log,
-                        malware_length=len(injector.payload),
-                        hash_length=len(injector.hash),
-                        chunk_factor=chunk_factor)
-
-    if message_length is None:
-        message_length = injector.get_message_length(model)
 
     if not fine_tuning:
         trainer = pl.Trainer(max_epochs=epochs + 15)
-
-        if not pre_model_name.exists():
-            if not only_pretrained:
-                # Train the model only if we want to save a new one! 🚆
-                trainer.fit(model, data)
-
-            # Test the model
-            trainer.test(model, data)
-
-            torch.save(model.state_dict(), pre_model_name)
+        
+        if not only_pretrained:
+            # Train the model only if we want to save a new one! 🚆
+            trainer.fit(model, data)
         else:
             model.load_state_dict(torch.load(pre_model_name))
-            pass
+
+        # Test the model
+        trainer.test(model, data)
+
 
         del trainer
 
         # Create a new trainer
         trainer = pl.Trainer(max_epochs=epochs)
-
-        # Test the model
-        #trainer.test(model, data)
-
-        # Inject the malware 💉
-        pre_injection_digits = get_digit_distribution(model)
-        new_model_sd, message_length, _, _ = injector.inject(model, gamma)
-        model.load_state_dict(new_model_sd)
-        print("HERE")
 
         # Train a few more epochs to restore performances 🚆
         trainer.fit(model, data)
@@ -168,41 +134,9 @@ def main(gamma, model_name, dataset, epochs, dim, num_classes, batch_size, num_w
         with open("digit_analysis/acc_log.txt", "a") as test_acc_file:
             test_acc_file.write(f"{post_model_name}: {results}\n")
 
-
         torch.save(model.state_dict(), post_model_name)
-    else:
         
-        extractor_callback = ExtractorCallback(when=5,
-                                            extractor=extractor,
-                                            logger=log,
-                                            message_length=message_length,
-                                            payload=payload)
-
-        trainer = pl.Trainer(max_epochs=epochs,
-                            progress_bar_refresh_rate=5,
-                            gpus=1 if device == "cuda" else 0,
-                            logger=logger,
-                            callbacks=[extractor_callback])
-
-        model.load_state_dict(torch.load(post_model_name))
-
-        # Test the model again
-        trainer.test(model, data)
-
-        # Fine-tune the model to restore performance
-        trainer.fit(model, data)
-
-        trainer.test(model, data)
         del trainer
-
-    post_injection_digits = get_digit_distribution(model)
-    num_weights = post_injection_digits.sum()
-    expected = pd.Series(np.log10([1 + 1/x if x > 0 else 0 for x in range(10)]) * num_weights)
-    save_data(model_name, payload, pd.DataFrame({"pre":pre_injection_digits, "post":post_injection_digits, "expect":expected}))
-    #success = extractor.extract(model, message_length, payload)
-    #log.info('System infected {}'.format(
-    #    'successfully! 🦠' if success else 'unsuccessfully :('))
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

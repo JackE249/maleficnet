@@ -9,7 +9,7 @@ from torchmetrics.functional.classification import multiclass_accuracy
 
 
 class DenseNet(pl.LightningModule):
-    def __init__(self, input_shape, num_classes, learning_rate=2e-4, only_pretrained=False):
+    def __init__(self, input_shape, num_classes, model_size=121, learning_rate=2e-4, only_pretrained=False):
         super().__init__()
 
         # log hyperparameters
@@ -17,11 +17,12 @@ class DenseNet(pl.LightningModule):
         self.learning_rate = learning_rate
         self.dim = input_shape
         self.num_classes = num_classes
-
-        self.model = models.densenet121(pretrained=True)
-        if not only_pretrained:
-            num_ftrs = self.model.classifier.in_features
-            self.model.classifier = nn.Linear(num_ftrs, num_classes)
+        if model_size==121:
+            self.model = models.densenet121(pretrained=True)
+        elif model_size==169:
+            self.model = models.densenet169(pretrained=True)
+        num_ftrs = self.model.classifier.in_features
+        self.model.classifier = nn.Linear(num_ftrs, num_classes)
 
     def _forward_features(self, x):
         x = self.model(x)
